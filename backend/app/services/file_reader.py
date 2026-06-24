@@ -14,6 +14,29 @@ CSV_ENCODINGS = ["utf-8-sig", "utf-8", "latin1"]
 
 
 async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
+    filename, extension, dataframe, delimiter = await read_uploaded_file(file)
+
+    preview_dataframe = dataframe.head(10)
+
+    return {
+        "filename": filename,
+        "extension": extension,
+        "delimiter": delimiter,
+        "rows_count": int(dataframe.shape[0]),
+        "columns_count": int(dataframe.shape[1]),
+        "columns": [str(column) for column in dataframe.columns],
+        "preview": dataframe_to_records(preview_dataframe),
+    }
+
+
+async def read_uploaded_dataframe(file: UploadFile) -> tuple[pd.DataFrame, str | None]:
+    _, _, dataframe, delimiter = await read_uploaded_file(file)
+    return dataframe, delimiter
+
+
+async def read_uploaded_file(
+    file: UploadFile,
+) -> tuple[str, str, pd.DataFrame, str | None]:
     filename = file.filename or ""
 
     if not filename:
@@ -40,17 +63,7 @@ async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
 
     dataframe, delimiter = _read_dataframe(contents=contents, extension=extension)
 
-    preview_dataframe = dataframe.head(10)
-
-    return {
-        "filename": filename,
-        "extension": extension,
-        "delimiter": delimiter,
-        "rows_count": int(dataframe.shape[0]),
-        "columns_count": int(dataframe.shape[1]),
-        "columns": [str(column) for column in dataframe.columns],
-        "preview": _dataframe_to_records(preview_dataframe),
-    }
+    return filename, extension, dataframe, delimiter
 
 
 def _read_dataframe(contents: bytes, extension: str) -> tuple[pd.DataFrame, str | None]:
@@ -122,6 +135,10 @@ def _fallback_detect_delimiter(sample: str) -> str:
     return best_delimiter
 
 
-def _dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
+def dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
     clean_dataframe = dataframe.where(pd.notnull(dataframe), None)
     return clean_dataframe.to_dict(orient="records")
+
+
+def _dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
+    return dataframe_to_records(dataframe)
