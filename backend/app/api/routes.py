@@ -15,6 +15,7 @@ from app.services.data_converter import (
     convert_dataframe,
     validate_target_format,
 )
+from app.services.data_normalizer import normalize_brazilian_dataframe
 from app.services.file_exporter import (
     build_cleaned_filename,
     dataframe_to_csv_bytes,
@@ -68,6 +69,7 @@ async def convert_preview_file(
     file: UploadFile = File(...),
     target_format: str = Form(...),
     clean_before_convert: bool = Form(default=True),
+    normalize_brazilian_data: bool = Form(default=False),
     table_name: str = Form(default="dados"),
 ) -> Any:
     target_format = _validate_target_format_for_request(target_format)
@@ -75,6 +77,11 @@ async def convert_preview_file(
 
     if clean_before_convert:
         dataframe, _ = clean_dataframe(dataframe)
+
+    normalization_report = _build_empty_normalization_report()
+
+    if normalize_brazilian_data:
+        dataframe, normalization_report = normalize_brazilian_dataframe(dataframe)
 
     content_preview = convert_dataframe(
         dataframe.head(10),
@@ -88,6 +95,11 @@ async def convert_preview_file(
         "delimiter": delimiter,
         "target_format": target_format,
         "clean_before_convert": clean_before_convert,
+        "normalize_brazilian_data": normalize_brazilian_data,
+        "normalized_numeric_columns": normalization_report[
+            "numeric_columns_normalized"
+        ],
+        "normalized_date_columns": normalization_report["date_columns_normalized"],
         "rows_count": int(dataframe.shape[0]),
         "columns_count": int(dataframe.shape[1]),
         "columns": [str(column) for column in dataframe.columns],
@@ -100,6 +112,7 @@ async def convert_download_file(
     file: UploadFile = File(...),
     target_format: str = Form(...),
     clean_before_convert: bool = Form(default=True),
+    normalize_brazilian_data: bool = Form(default=False),
     table_name: str = Form(default="dados"),
 ) -> StreamingResponse:
     target_format = _validate_target_format_for_request(target_format)
@@ -107,6 +120,9 @@ async def convert_download_file(
 
     if clean_before_convert:
         dataframe, _ = clean_dataframe(dataframe)
+
+    if normalize_brazilian_data:
+        dataframe, _ = normalize_brazilian_dataframe(dataframe)
 
     converted_content = convert_dataframe(
         dataframe,
@@ -132,11 +148,17 @@ async def convert_download_file(
 async def analyze_preview_file(
     file: UploadFile = File(...),
     clean_before_analyze: bool = Form(default=True),
+    normalize_brazilian_data: bool = Form(default=False),
 ) -> Any:
     filename, extension, dataframe, delimiter = await read_uploaded_file(file)
 
     if clean_before_analyze:
         dataframe, _ = clean_dataframe(dataframe)
+
+    normalization_report = _build_empty_normalization_report()
+
+    if normalize_brazilian_data:
+        dataframe, normalization_report = normalize_brazilian_dataframe(dataframe)
 
     analysis = analyze_dataframe(dataframe)
 
@@ -145,6 +167,11 @@ async def analyze_preview_file(
         "extension": extension,
         "delimiter": delimiter,
         "clean_before_analyze": clean_before_analyze,
+        "normalize_brazilian_data": normalize_brazilian_data,
+        "normalized_numeric_columns": normalization_report[
+            "numeric_columns_normalized"
+        ],
+        "normalized_date_columns": normalization_report["date_columns_normalized"],
         **analysis,
     }
 
@@ -166,3 +193,10 @@ def _get_converter_media_type(target_format: str) -> str:
         "sql": "application/sql",
     }
     return media_types[target_format]
+
+
+def _build_empty_normalization_report() -> dict[str, list[str]]:
+    return {
+        "numeric_columns_normalized": [],
+        "date_columns_normalized": [],
+    }

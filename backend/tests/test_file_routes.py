@@ -20,6 +20,13 @@ ANALYSIS_CSV = """Data Venda,Produto,Forma Pagamento,Valor,Observação
 ,Queijo,Pix,10.0,
 """
 
+BRAZILIAN_NORMALIZATION_CSV = """Data Venda;Produto;Forma Pagamento;Valor;Observação
+01/06/2026;Queijo;credito;R$ 30,50;
+02/06/2026;Feijao;pix;12,00;
+03/06/2026;Manteiga;dinheiro;R$ 18,75;
+31/12/2026;Goma;pix;1.234,56;
+"""
+
 
 def test_clean_download_file_returns_csv_download() -> None:
     response = client.post(
@@ -80,6 +87,9 @@ def test_convert_preview_file_with_json_returns_preview() -> None:
     assert response.status_code == 200
     assert body["target_format"] == "json"
     assert body["clean_before_convert"] is True
+    assert body["normalize_brazilian_data"] is False
+    assert body["normalized_numeric_columns"] == []
+    assert body["normalized_date_columns"] == []
     assert '"data_venda"' in body["content_preview"]
 
 
@@ -160,6 +170,7 @@ def test_analyze_preview_file_returns_analysis_with_cleaning_enabled() -> None:
 
     assert response.status_code == 200
     assert body["clean_before_analyze"] is True
+    assert body["normalize_brazilian_data"] is False
     assert body["rows_count"] == 3
     assert body["columns_count"] == 5
     assert body["column_summaries"]
@@ -181,3 +192,58 @@ def test_analyze_preview_file_returns_analysis_without_cleaning() -> None:
     assert body["clean_before_analyze"] is False
     assert body["rows_count"] == 4
     assert body["duplicate_rows_count"] == 1
+
+
+def test_analyze_preview_file_with_brazilian_normalization() -> None:
+    response = client.post(
+        "/api/files/analyze-preview",
+        data={
+            "clean_before_analyze": "true",
+            "normalize_brazilian_data": "true",
+        },
+        files={
+            "file": (
+                "vendas-br-normalizacao.csv",
+                BRAZILIAN_NORMALIZATION_CSV.encode(),
+                "text/csv",
+            )
+        },
+    )
+
+    body = response.json()
+    valor_summary = next(
+        summary for summary in body["numeric_summaries"] if summary["name"] == "valor"
+    )
+
+    assert response.status_code == 200
+    assert body["normalize_brazilian_data"] is True
+    assert body["normalized_numeric_columns"] == ["valor"]
+    assert body["normalized_date_columns"] == ["data_venda"]
+    assert valor_summary["sum"] == 1295.81
+    assert valor_summary["min"] == 12.0
+    assert valor_summary["max"] == 1234.56
+
+
+def test_convert_preview_file_with_brazilian_normalization() -> None:
+    response = client.post(
+        "/api/files/convert-preview",
+        data={
+            "target_format": "json",
+            "normalize_brazilian_data": "true",
+        },
+        files={
+            "file": (
+                "vendas-br-normalizacao.csv",
+                BRAZILIAN_NORMALIZATION_CSV.encode(),
+                "text/csv",
+            )
+        },
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["normalize_brazilian_data"] is True
+    assert body["normalized_numeric_columns"] == ["valor"]
+    assert body["normalized_date_columns"] == ["data_venda"]
+    assert '"valor": 30.5' in body["content_preview"]

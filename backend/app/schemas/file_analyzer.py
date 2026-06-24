@@ -41,6 +41,9 @@ class FileAnalyzerResponse(BaseModel):
     extension: str
     delimiter: str | None
     clean_before_analyze: bool
+    normalize_brazilian_data: bool
+    normalized_numeric_columns: list[str]
+    normalized_date_columns: list[str]
     rows_count: int
     columns_count: int
     columns: list[str]
