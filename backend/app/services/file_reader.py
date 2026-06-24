@@ -1,3 +1,5 @@
+from csv import Error as CsvError
+from csv import Sniffer
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -7,6 +9,8 @@ from fastapi import HTTPException, UploadFile, status
 
 
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+CSV_DELIMITERS = [",", ";", "\t", "|"]
+CSV_ENCODINGS = ["utf-8-sig", "utf-8", "latin1"]
 
 
 async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
@@ -34,13 +38,14 @@ async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
             detail="Arquivo vazio.",
         )
 
-    dataframe = _read_dataframe(contents=contents, extension=extension)
+    dataframe, delimiter = _read_dataframe(contents=contents, extension=extension)
 
     preview_dataframe = dataframe.head(10)
 
     return {
         "filename": filename,
         "extension": extension,
+        "delimiter": delimiter,
         "rows_count": int(dataframe.shape[0]),
         "columns_count": int(dataframe.shape[1]),
         "columns": [str(column) for column in dataframe.columns],
@@ -48,19 +53,73 @@ async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
     }
 
 
-def _read_dataframe(contents: bytes, extension: str) -> pd.DataFrame:
-    buffer = BytesIO(contents)
-
+def _read_dataframe(contents: bytes, extension: str) -> tuple[pd.DataFrame, str | None]:
     try:
         if extension == ".csv":
-            return pd.read_csv(buffer)
+            dataframe, delimiter = _read_csv(contents)
+            return dataframe, delimiter
 
-        return pd.read_excel(buffer)
+        dataframe = pd.read_excel(BytesIO(contents))
+        return dataframe, None
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não foi possível ler o arquivo. Verifique se ele está válido.",
         ) from error
+
+
+def _read_csv(contents: bytes) -> tuple[pd.DataFrame, str]:
+    sample, encoding = _decode_csv_sample(contents)
+    delimiter = _detect_csv_delimiter(sample)
+
+    dataframe = pd.read_csv(
+        BytesIO(contents),
+        sep=delimiter,
+        encoding=encoding,
+    )
+
+    return dataframe, delimiter
+
+
+def _decode_csv_sample(contents: bytes) -> tuple[str, str]:
+    sample_bytes = contents[:8192]
+
+    for encoding in CSV_ENCODINGS:
+        try:
+            return sample_bytes.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+
+    return sample_bytes.decode("latin1", errors="replace"), "latin1"
+
+
+def _detect_csv_delimiter(sample: str) -> str:
+    try:
+        dialect = Sniffer().sniff(sample, delimiters=CSV_DELIMITERS)
+        return dialect.delimiter
+    except CsvError:
+        return _fallback_detect_delimiter(sample)
+
+
+def _fallback_detect_delimiter(sample: str) -> str:
+    lines = [line for line in sample.splitlines() if line.strip()][:5]
+
+    if not lines:
+        return ","
+
+    delimiter_scores = {
+        delimiter: sum(line.count(delimiter) for line in lines)
+        for delimiter in CSV_DELIMITERS
+    }
+
+    best_delimiter = max(delimiter_scores, key=delimiter_scores.get)
+
+    if delimiter_scores[best_delimiter] == 0:
+        return ","
+
+    return best_delimiter
 
 
 def _dataframe_to_records(dataframe: pd.DataFrame) -> list[dict[str, Any]]:
