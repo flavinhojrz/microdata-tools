@@ -13,6 +13,13 @@ DIRTY_CSV = """ Data Venda ,Forma de Pagamento,Valor R$,Observação,Coluna Vazi
 2026-06-02,Cartão,"R$ 250,00",Aguardando,
 """
 
+ANALYSIS_CSV = """Data Venda,Produto,Forma Pagamento,Valor,Observação
+01/06/2026,Queijo,Pix,30.5,Pago
+02/06/2026,Café,Cartão,20.0,
+02/06/2026,Café,Cartão,20.0,
+,Queijo,Pix,10.0,
+"""
+
 
 def test_clean_download_file_returns_csv_download() -> None:
     response = client.post(
@@ -140,3 +147,37 @@ def test_convert_preview_file_with_invalid_format_returns_400() -> None:
     )
 
     assert response.status_code == 400
+
+
+def test_analyze_preview_file_returns_analysis_with_cleaning_enabled() -> None:
+    response = client.post(
+        "/api/files/analyze-preview",
+        data={"clean_before_analyze": "true"},
+        files={"file": ("vendas-analise.csv", ANALYSIS_CSV.encode(), "text/csv")},
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["clean_before_analyze"] is True
+    assert body["rows_count"] == 3
+    assert body["columns_count"] == 5
+    assert body["column_summaries"]
+    assert body["numeric_summaries"]
+    assert body["categorical_summaries"]
+    assert body["date_summaries"]
+
+
+def test_analyze_preview_file_returns_analysis_without_cleaning() -> None:
+    response = client.post(
+        "/api/files/analyze-preview",
+        data={"clean_before_analyze": "false"},
+        files={"file": ("vendas-analise.csv", ANALYSIS_CSV.encode(), "text/csv")},
+    )
+
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["clean_before_analyze"] is False
+    assert body["rows_count"] == 4
+    assert body["duplicate_rows_count"] == 1

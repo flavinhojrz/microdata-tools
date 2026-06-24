@@ -4,9 +4,11 @@ from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 
+from app.schemas.file_analyzer import FileAnalyzerResponse
 from app.schemas.file_cleaner import FileCleanerResponse
 from app.schemas.file_converter import FileConverterPreviewResponse
 from app.schemas.file_preview import FilePreviewResponse
+from app.services.data_analyzer import analyze_dataframe
 from app.services.data_cleaner import clean_dataframe
 from app.services.data_converter import (
     build_converted_filename,
@@ -124,6 +126,27 @@ async def convert_download_file(
             "Content-Disposition": f'attachment; filename="{converted_filename}"',
         },
     )
+
+
+@router.post("/files/analyze-preview", response_model=FileAnalyzerResponse)
+async def analyze_preview_file(
+    file: UploadFile = File(...),
+    clean_before_analyze: bool = Form(default=True),
+) -> Any:
+    filename, extension, dataframe, delimiter = await read_uploaded_file(file)
+
+    if clean_before_analyze:
+        dataframe, _ = clean_dataframe(dataframe)
+
+    analysis = analyze_dataframe(dataframe)
+
+    return {
+        "filename": filename,
+        "extension": extension,
+        "delimiter": delimiter,
+        "clean_before_analyze": clean_before_analyze,
+        **analysis,
+    }
 
 
 def _validate_target_format_for_request(target_format: str) -> str:
