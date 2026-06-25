@@ -120,7 +120,8 @@ export function UploadDropzone({
         <p className="mt-3 text-xs text-destructive">{error}</p>
       ) : (
         <p className="mt-3 text-xs text-muted-foreground">
-          Arquivos processados apenas para gerar o resultado.
+          Arquivos são processados apenas para gerar o resultado. Evite enviar
+          dados extremamente sensíveis.
         </p>
       )}
     </div>

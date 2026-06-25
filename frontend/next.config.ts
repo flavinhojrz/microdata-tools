@@ -28,7 +28,8 @@ const cspHeader = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
+  // O botão oficial do Buy Me a Coffee é servido como imagem por este host.
+  "img-src 'self' blob: data: https://img.buymeacoffee.com",
   "font-src 'self' data:",
   `connect-src 'self' ${apiBaseUrl}${isDev ? " ws:" : ""}`,
   "object-src 'none'",
