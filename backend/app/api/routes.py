@@ -26,7 +26,7 @@ from app.services.file_reader import (
     read_uploaded_file,
 )
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", tags=["files"])
 
 
 @router.post("/files/preview", response_model=FilePreviewResponse)

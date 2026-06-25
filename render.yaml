@@ -1,0 +1,32 @@
+# Render Blueprint — publica apenas o backend FastAPI.
+# O frontend é publicado no Vercel (ver frontend/vercel.json e DEPLOYMENT.md).
+services:
+  - type: web
+    name: microdata-tools-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install uv && uv sync --frozen --no-dev
+    startCommand: uv run fastapi run app/main.py --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: ENVIRONMENT
+        value: production
+      - key: ENABLE_DOCS
+        value: "false"
+      - key: APP_NAME
+        value: MicroData Tools API
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"
+      - key: BACKEND_CORS_ORIGINS
+        value: https://microdata-tools.vercel.app
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_REQUESTS_PER_MINUTE
+        value: "60"
+      - key: RATE_LIMIT_UPLOADS_PER_MINUTE
+        value: "20"

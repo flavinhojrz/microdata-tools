@@ -7,10 +7,13 @@ from typing import Any
 import pandas as pd
 from fastapi import HTTPException, UploadFile, status
 
+from app.core.config import get_settings
+
 
 SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 CSV_DELIMITERS = [",", ";", "\t", "|"]
 CSV_ENCODINGS = ["utf-8-sig", "utf-8", "latin1"]
+UPLOAD_CHUNK_SIZE = 64 * 1024
 
 
 async def generate_file_preview(file: UploadFile) -> dict[str, Any]:
@@ -53,7 +56,13 @@ async def read_uploaded_file(
             detail="Formato não suportado. Envie um arquivo CSV, XLSX ou XLS.",
         )
 
-    contents = await file.read()
+    settings = get_settings()
+
+    contents = await _read_within_limit(
+        file,
+        max_bytes=settings.max_upload_size_bytes,
+        limit_mb=settings.MAX_UPLOAD_SIZE_MB,
+    )
 
     if not contents:
         raise HTTPException(
@@ -64,6 +73,35 @@ async def read_uploaded_file(
     dataframe, delimiter = _read_dataframe(contents=contents, extension=extension)
 
     return filename, extension, dataframe, delimiter
+
+
+async def _read_within_limit(
+    file: UploadFile,
+    max_bytes: int,
+    limit_mb: int,
+) -> bytes:
+    # Lemos em blocos e abortamos assim que o limite é ultrapassado, sem carregar
+    # o arquivo inteiro em memória. Protege o backend de uploads grandes demais.
+    chunks: list[bytes] = []
+    total = 0
+
+    while True:
+        chunk = await file.read(UPLOAD_CHUNK_SIZE)
+
+        if not chunk:
+            break
+
+        total += len(chunk)
+
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=(f"Arquivo muito grande. O limite atual é de {limit_mb} MB."),
+            )
+
+        chunks.append(chunk)
+
+    return b"".join(chunks)
 
 
 def _read_dataframe(contents: bytes, extension: str) -> tuple[pd.DataFrame, str | None]:

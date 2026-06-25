@@ -16,6 +16,14 @@ env/
 .vscode/
 .idea/
 
+# Claude Code (local-only settings)
+.claude/settings.local.json
+
+# Node / Next.js (frontend tem .gitignore próprio; reforçamos aqui)
+node_modules/
+.next/
+*.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db

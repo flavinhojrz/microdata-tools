@@ -48,6 +48,18 @@ def test_clean_download_file_returns_csv_download() -> None:
     assert "R$ 120,00" in csv_text
 
 
+def test_download_exposes_content_disposition_to_cross_origin() -> None:
+    response = client.post(
+        "/api/files/clean-download",
+        files={"file": ("vendas-sujas.csv", DIRTY_CSV.encode(), "text/csv")},
+        headers={"Origin": "http://localhost:3000"},
+    )
+
+    assert response.status_code == 200
+    exposed = response.headers["access-control-expose-headers"]
+    assert "Content-Disposition" in exposed
+
+
 def test_preview_file_still_responds() -> None:
     response = client.post(
         "/api/files/preview",
